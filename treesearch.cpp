@@ -4,12 +4,15 @@
 #include <time.h>
 #include <vector>
 #include <math.h>
+#include <algorithm>
+#include <stack>
 
 using namespace std;
 
 #define RANDOM_LIMIT 9
-#define n_cities 5
+#define n_cities 3
 #define hometown 0 
+#define NC -1
 
 //en la representación de un digrafo cada fila representará los costos de ida y cada columna los costos de vuelta
 
@@ -164,7 +167,287 @@ class Node{
 			}
 			
 		}
-};
+		//verifica si ya ha sido visitada una ciudad y si conviene tomar una ruta con un mejor costo
+		bool feasible(vector <int> tour, int city, int totalCost){
+			if(find(tour.begin(), tour.end(), city) != tour.end()){
+				return false;
+			}else{
+				int newTotalCost = totalCost + cost;
+				if(newTotalCost > totalCost)
+					return false;
+				else 
+					return true;
+			}
+		}
+		//recursiva
+		void depth_first_search(vector <int> &bestTour, vector <int> &tour, int totalCost){
+			if(tour.size() == n_cities){
+				bestTour = tour;
+			}else{
+				for(int i = 0; i < children.size(); i++){
+					if(feasible(tour, children[i]->data, totalCost)){
+						tour.push_back(children[i]->data);
+						totalCost += children[i]->cost;
+						depth_first_search(bestTour, tour, totalCost);
+						tour.pop_back();
+					}
+				}			
+			
+			}
+		}
+		//no recursiva
+		void depth_first_search2(stack <int> S, vector <int> &tour){
+			for(int i = n_cities-1; i >= 0; i--){
+				S.push(i);
+			}
+			int totalCost = 0;
+			while(!S.empty()){
+				int city = S.top();
+				if(city == NC){
+					tour.pop_back();
+				}
+				else{
+					tour.push_back(data);
+					if(tour.size() == n_cities){
+						if(feasible(tour, city, totalCost)){
+							tour.push_back(data);
+						}
+						tour.pop_back();
+
+					}else{
+						S.push(NC);
+						for(int i = n_cities-1; i >= 0; i++){
+							if(feasible(tour, city, totalCost))
+								S.push(city);
+						}
+					}
+				}
+			}
+		}
+
+		//paralelizada 1
+		void depth_first_searchP1(vector <int> &bestTour, vector <int> &tour, int totalCost){
+			if(tour.size() == n_cities){
+				bestTour = tour;
+			}else{
+				#pragma omp parallel for
+				for(int i = 0; i < children.size(); i++){
+					if(feasible(tour, children[i]->data, totalCost)){
+						tour.push_back(children[i]->data);
+						totalCost += children[i]->cost;
+						depth_first_search(bestTour, tour, totalCost);
+						tour.pop_back();
+					}
+				}			
+			
+			}
+		}
+
+		//paralelizada 2
+		void depth_first_searchP2(vector <int> &bestTour, vector <int> &tour, int totalCost){
+			if(tour.size() == n_cities){
+				bestTour = tour;
+			}else{
+				#pragma omp for
+				for(int i = 0; i < children.size(); i++){
+					if(feasible(tour, children[i]->data, totalCost)){
+						tour.push_back(children[i]->data);
+						totalCost += children[i]->cost;
+						depth_first_search(bestTour, tour, totalCost);
+						tour.pop_back();
+					}
+				}			
+			
+			}
+		}
+		//paralelizada 3
+		void depth_first_searchP3(vector <int> &bestTour, vector <int> &tour, int totalCost){
+			if(tour.size() == n_cities){
+				bestTour = tour;
+			}else{
+				#pragma omp for
+				for(int i = 0; i < children.size(); i++){
+					if(feasible(tour, children[i]->data, totalCost)){
+						tour.push_back(children[i]->data);
+						totalCost += children[i]->cost;
+						#pragma omp critical
+						depth_first_search(bestTour, tour, totalCost);
+						tour.pop_back();
+					}
+				}			
+			
+			}
+		}
+		//paralelizada 4
+		void depth_first_searchP4(vector <int> &bestTour, vector <int> &tour, int totalCost){
+			#pragma omp single
+			{
+			if(tour.size() == n_cities){
+				bestTour = tour;
+			}else{
+				#pragma omp parallel for
+				for(int i = 0; i < children.size(); i++){
+					if(feasible(tour, children[i]->data, totalCost)){
+						tour.push_back(children[i]->data);
+						totalCost += children[i]->cost;
+						depth_first_search(bestTour, tour, totalCost);
+						tour.pop_back();
+					}
+				}			
+			
+			}
+			}
+		}
+		//paralelizada 5
+		void depth_first_searchP5(vector <int> &bestTour, vector <int> &tour, int totalCost){
+			if(tour.size() == n_cities){
+				bestTour = tour;
+			}else{
+				#pragma omp for
+				for(int i = 0; i < children.size(); i++){
+					#pragma omp master
+					if(feasible(tour, children[i]->data, totalCost)){
+						tour.push_back(children[i]->data);
+						totalCost += children[i]->cost;
+						depth_first_search(bestTour, tour, totalCost);
+						tour.pop_back();
+					}
+				}			
+			
+			}
+		}
+		//paralelizada 6
+		void depth_first_search2P1(stack <int> S, vector <int> &tour){
+			#pragma omp parallel for
+			for(int i = n_cities-1; i >= 0; i--){
+				S.push(i);
+			}
+			int totalCost = 0;
+			#pragma omp parallel for
+			while(!S.empty()){
+				int city = S.top();
+				if(city == NC){
+					tour.pop_back();
+				}
+				else{
+					tour.push_back(data);
+					if(tour.size() == n_cities){
+						if(feasible(tour, city, totalCost)){
+							tour.push_back(data);
+						}
+						tour.pop_back();
+
+					}else{
+						S.push(NC);
+						#pragma omp parallel for
+						for(int i = n_cities-1; i >= 0; i++){
+							if(feasible(tour, city, totalCost))
+								S.push(city);
+						}
+					}
+				}
+			}
+		}
+
+		//paralelizada 7
+		void depth_first_search2P2(stack <int> S, vector <int> &tour){
+			#pragma omp for
+			for(int i = n_cities-1; i >= 0; i--){
+				S.push(i);
+			}
+			int totalCost = 0;
+			#pragma omp for
+			while(!S.empty()){
+				int city = S.top();
+				if(city == NC){
+					tour.pop_back();
+				}
+				else{
+					tour.push_back(data);
+					if(tour.size() == n_cities){
+						if(feasible(tour, city, totalCost)){
+							tour.push_back(data);
+						}
+						tour.pop_back();
+
+					}else{
+						S.push(NC);
+						#pragma omp for
+						for(int i = n_cities-1; i >= 0; i++){
+							if(feasible(tour, city, totalCost))
+								S.push(city);
+						}
+					}
+				}
+			}
+		}
+
+		//paralelizada 8
+		void depth_first_search2P3(stack <int> S, vector <int> &tour){
+			#pragma omp for
+			for(int i = n_cities-1; i >= 0; i--){
+				S.push(i);
+			}
+			int totalCost = 0;
+			#pragma omp for
+			while(!S.empty()){
+				int city = S.top();
+				if(city == NC){
+					tour.pop_back();
+				}
+				else{
+					tour.push_back(data);
+					if(tour.size() == n_cities){
+						if(feasible(tour, city, totalCost)){
+							tour.push_back(data);
+						}
+						tour.pop_back();
+
+					}else{
+						S.push(NC);
+						#pragma omp critical
+						for(int i = n_cities-1; i >= 0; i++){
+							if(feasible(tour, city, totalCost))
+								S.push(city);
+						}
+					}
+				}
+			}
+		}
+		//paralelizada 9
+		void depth_first_search2P4(stack <int> S, vector <int> &tour){
+			#pragma omp single
+			for(int i = n_cities-1; i >= 0; i--){
+				S.push(i);
+			}
+			int totalCost = 0;
+			#pragma omp for
+			while(!S.empty()){
+				int city = S.top();
+				if(city == NC){
+					tour.pop_back();
+				}
+				else{
+					tour.push_back(data);
+					if(tour.size() == n_cities){
+						if(feasible(tour, city, totalCost)){
+							tour.push_back(data);
+						}
+						tour.pop_back();
+
+					}else{
+						S.push(NC);
+						#pragma omp master
+						for(int i = n_cities-1; i >= 0; i++){
+							if(feasible(tour, city, totalCost))
+								S.push(city);
+						}
+						#pragma omp barrier
+					}
+				}
+			}
+		}
+};	
 
 int _tmain(int argc, _TCHAR* argv[])
 {
@@ -174,8 +457,12 @@ int _tmain(int argc, _TCHAR* argv[])
 	Node *tree = new Node();
 	tree->buildTree(digraph, hometown, 0);
 	tree->print();
-	
-	
+	vector <int> tour; //almacena el tour en el depth search
+	vector <int> bestTour;
+	int totalCost = 0;
+	stack <int> S;
+	tree->depth_first_searchP4(bestTour, tour, totalCost);
+	tree->depth_first_search2P3(S, tour);
 	return 0;
 }
 
